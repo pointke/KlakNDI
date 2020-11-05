@@ -68,4 +68,17 @@ public struct Tally
     public bool OnPreview;
 }
 
+[StructLayoutAttribute(LayoutKind.Sequential)]
+public struct AudioFrame
+{
+    public int SampleRate;
+    public int NoChannels;
+    public int NoSamples;
+    public long Timecode;
+    public IntPtr Data;
+    public int ChannelStride;
+    public IntPtr Metadata;
+    public long Timestamp;
+}
+
 }
