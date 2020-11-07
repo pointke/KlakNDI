@@ -148,7 +148,7 @@ public sealed partial class NdiSender : MonoBehaviour
                 FourCC = _enableAlpha ?
                   Interop.FourCC.UYVA : Interop.FourCC.UYVY,
                 FrameFormat = Interop.FrameFormat.Progressive,
-                Data = (System.IntPtr)pdata, Metadata = metadata };
+                Data = (System.IntPtr)pdata, _Metadata = metadata };
 
             // Send via NDI
             _send.SendVideoAsync(frame);
@@ -279,7 +279,7 @@ public sealed partial class NdiSender : MonoBehaviour
                     SampleRate = 48000,
                     NoChannels = channels,
                     NoSamples = numSamples,
-                    ChannelStride = numSamples * sizeof(float),
+                    ChannelStrideInBytes = numSamples * sizeof(float),
                     Data = (System.IntPtr)p
                 };
 
