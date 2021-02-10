@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections;
+using UnityEngine;
+
 
 namespace CircularBuffer
 {
@@ -115,11 +117,42 @@ namespace CircularBuffer
             return _buffer[_start];
         }
 
-        /// <summary>
-        /// Element at the back of the buffer - this[Size - 1].
-        /// </summary>
-        /// <returns>The value of the element of type T at the back of the buffer.</returns>
-        public T Back()
+		/// <summary>
+		/// Element at the front of the buffer - this[0].
+		/// </summary>
+		/// <returns>Copies the elements from the front of the buffer to a supplied array.</returns>
+		public void Front( ref T[] aToArray, int iRequested)
+		{
+			ThrowIfEmpty();
+
+			// Can pull all the elements?
+			if(_size < iRequested )
+			{
+				throw new InvalidOperationException("Not enough elements in the buffer");
+			}
+
+			int iToEndOfBuffer = _buffer.Length - _start;
+			if ( iRequested <= iToEndOfBuffer)
+			{
+				// Copy out in one shot
+				Array.Copy( _buffer, _start, aToArray, 0, iRequested );
+			}
+			else
+			{
+				// Copy from current head to end of buffer
+				Array.Copy(_buffer, _start, aToArray, 0, iToEndOfBuffer);
+
+				// Copy from start of buffer
+				int iRemaining = iRequested - iToEndOfBuffer;
+				Array.Copy(_buffer, 0, aToArray, iToEndOfBuffer, iRemaining);
+			}
+		}
+
+		/// <summary>
+		/// Element at the back of the buffer - this[Size - 1].
+		/// </summary>
+		/// <returns>The value of the element of type T at the back of the buffer.</returns>
+		public T Back()
         {
             ThrowIfEmpty();
             return _buffer[(_end != 0 ? _end : Capacity) - 1];
@@ -179,15 +212,64 @@ namespace CircularBuffer
             }
         }
 
-        /// <summary>
-        /// Pushes a new element to the front of the buffer. Front()/this[0]
-        /// will now return this element.
-        /// 
-        /// When the buffer is full, the element at Back()/this[Size-1] will be 
-        /// popped to allow for this new element to fit.
-        /// </summary>
-        /// <param name="item">Item to push to the front of the buffer</param>
-        public void PushFront(T item)
+		/// <summary>
+		/// Pushes a new element to the back of the buffer. Back()/this[Size-1]
+		/// will now return this element.
+		/// 
+		/// When the buffer is full, the element at Front()/this[0] will be 
+		/// popped to allow for this new element to fit.
+		/// </summary>
+		/// <param name="item">Item to push to the back of the buffer</param>
+		public void PushBack(T[] aitems, int iToAdd)
+		{
+			// Cannot copy more than a full buffers worth
+			if( iToAdd > _buffer.Length )
+			{
+				throw new InvalidOperationException("Cannot copy more than a full buffers worth");
+			}
+
+			// Pushing more than we have room for?
+			bool bOverrun = ( iToAdd > (_buffer.Length - _size) );
+
+			// Copy in a single chunk?
+			int iToEndOfBuffer = _buffer.Length - _end;
+			if (iToAdd <= iToEndOfBuffer)
+			{
+				// Copy out in one shot
+				Array.Copy(aitems, 0, _buffer, _end, iToAdd);
+			}
+			else
+			{
+				// Copy to the end of the buffer
+				Array.Copy(aitems, 0, _buffer, _end, iToEndOfBuffer);
+
+				// Copy to start of buffer
+				int iRemaining = iToAdd - iToEndOfBuffer;
+				Array.Copy(aitems, iToEndOfBuffer, _buffer, 0, iRemaining);
+			}
+
+			_end = (_end + iToAdd) % _buffer.Length;
+			if ( bOverrun )
+			{
+				_start = _end;
+			}
+			
+			_size += iToAdd;
+			if (_size > _buffer.Length)
+			{
+				_size = _buffer.Length;
+			}
+		}
+
+		/// <summary>
+		/// Pushes a new element to the front of the buffer. Front()/this[0]
+		/// will now return this element.
+		/// 
+		/// When the buffer is full, the element at Back()/this[Size-1] will be 
+		/// popped to allow for this new element to fit.
+		/// </summary>
+		/// <param name="item">Item to push to the front of the buffer</param>
+		public void PushFront(T item)
         {
             if (IsFull)
             {
@@ -227,13 +309,34 @@ namespace CircularBuffer
             --_size;
         }
 
-        /// <summary>
-        /// Copies the buffer contents to an array, according to the logical
-        /// contents of the buffer (i.e. independent of the internal 
-        /// order/contents)
-        /// </summary>
-        /// <returns>A new array with a copy of the buffer contents.</returns>
-        public T[] ToArray()
+		/// <summary>
+		/// Removes elements at the front of the buffer. Decreasing the 
+		/// Buffer size by iRequested.
+		/// </summary>
+		public void PopFront(int iRequested)
+		{
+			ThrowIfEmpty("Cannot take elements from an empty buffer.");
+
+			// Enough elements
+			if (_size < iRequested)
+			{
+				throw new InvalidOperationException("Not enough elements in the buffer to pop");
+			}
+
+			// TODO: Clear elements? Really don't need to
+//			_buffer[_start] = default(T);
+
+			_start = ( _start + iRequested ) % _buffer.Length;
+			_size -= iRequested;
+		}
+
+		/// <summary>
+		/// Copies the buffer contents to an array, according to the logical
+		/// contents of the buffer (i.e. independent of the internal 
+		/// order/contents)
+		/// </summary>
+		/// <returns>A new array with a copy of the buffer contents.</returns>
+		public T[] ToArray()
         {
             T[] newArray = new T[Size];
             int newArrayOffset = 0;

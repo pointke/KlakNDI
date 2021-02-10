@@ -212,9 +212,17 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 	#region Audio implementation
 
-	private readonly object audioBufferLock = new object();
-	private CircularBuffer<float> audioBuffer;
-	private const int BUFFER_SIZE = 4096;
+	private readonly object					audioBufferLock = new object();
+	private const int						BUFFER_SIZE = 1024 * 32;
+	private CircularBuffer<float>			audioBuffer = new CircularBuffer<float>(BUFFER_SIZE);
+	//
+	private bool							m_bWaitForBufferFill = true;
+	private const int						m_iMinBufferAheadFrames = 4;
+	//
+	private NativeArray<byte>				m_aTempAudioPullBuffer;
+	private Interop.AudioFrameInterleaved	interleavedAudio = new Interop.AudioFrameInterleaved();
+	//
+	private float[]							m_aTempSamplesArray = new float[ 1024 * 32 ];
 
 	void PrepareAudioSource(Interop.AudioFrame audioFrame)
 	{
@@ -232,14 +240,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 			// Create a AudioClip that matches the incomming frame
 			audioClip = AudioClip.Create("NdiReceiver Audio", audioFrame.SampleRate, audioFrame.NoChannels, audioFrame.SampleRate, true);
-
-			lock (audioBufferLock)
-			{
-				if (audioBuffer == null || audioBuffer.Capacity != audioFrame.SampleRate)
-				{
-					audioBuffer = new CircularBuffer<float>(BUFFER_SIZE * audioFrame.NoChannels);
-				}
-			}
 		}
 
 		audioSource.loop = true;
@@ -249,22 +249,42 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 	void OnAudioFilterRead(float[] data, int channels)
 	{
+		int length = data.Length;
+
+		// STE: Waiting for enough read ahead buffer frames?
+		if (m_bWaitForBufferFill)
+		{
+			// Are we good yet?
+			// Should we be protecting audioBuffer.Size here?
+			m_bWaitForBufferFill = ( audioBuffer.Size < (length * m_iMinBufferAheadFrames) );
+
+			// Early out if not enough in the buffer still
+			if (m_bWaitForBufferFill)
+			{
+				return;
+			}
+		}
+
+		bool bPreviousWaitForBufferFill = m_bWaitForBufferFill;
+		int iAudioBufferSize = 0;
+
+		// STE: Lock buffer for the smallest amount of time
 		lock (audioBufferLock)
 		{
-			int length = data.Length;
+			iAudioBufferSize = audioBuffer.Size;
 
-			for (int i = 0; i < length; i++)
+			// If we do not have enough data for a single frame then we will want to buffer up some read-ahead audio data. This will cause a longer gap in the audio playback, but this is better than more intermittent glitches I think
+			m_bWaitForBufferFill = (iAudioBufferSize < length);
+			if( !m_bWaitForBufferFill )
 			{
-				if (audioBuffer.IsEmpty)
-				{
-					data[i] = 0.0f;
-				}
-				else
-				{
-					data[i] = audioBuffer.Front();
-					audioBuffer.PopFront();
-				}
+				audioBuffer.Front( ref data, data.Length );
+				audioBuffer.PopFront( data.Length );
 			}
+		}
+
+		if ( m_bWaitForBufferFill && !bPreviousWaitForBufferFill )
+		{
+			Debug.Log("NOT ENOUGH AUDIO : OnAudioFilterRead: data.Length = " + data.Length + "| audioBuffer.Size = " + iAudioBufferSize);
 		}
 	}
 
@@ -275,43 +295,53 @@ public sealed partial class NdiReceiver : MonoBehaviour
 			return;
 		}
 
-		lock (audioBufferLock)
+		// Converted from NDI C# Managed sample code
+		// we're working in bytes, so take the size of a 32 bit sample (float) into account
+		int sizeInBytes = audio.NoSamples * audio.NoChannels * sizeof(float);
+
+		// Unity is expecting interleaved audio and NDI uses planar.
+		// create an interleaved frame and convert from the one we received
+		interleavedAudio.SampleRate = audio.SampleRate;
+		interleavedAudio.NoChannels = audio.NoChannels;
+		interleavedAudio.NoSamples = audio.NoSamples;
+		interleavedAudio.Timecode = audio.Timecode;
+
+		// allocate native array to copy interleaved data into
+		unsafe
 		{
-			if (audioBuffer == null)
+			if( m_aTempAudioPullBuffer == null || m_aTempAudioPullBuffer.Length < sizeInBytes)
 			{
-				audioBuffer = new CircularBuffer<float>(BUFFER_SIZE * audio.NoChannels);
+				m_aTempAudioPullBuffer = new NativeArray<byte>(sizeInBytes, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 			}
 
-			// Converted from NDI C# Managed sample code
-			// we're working in bytes, so take the size of a 32 bit sample (float) into account
-			int sizeInBytes = audio.NoSamples * audio.NoChannels * sizeof(float);
-
-			// Unity is expecting interleaved audio and NDI uses planar.
-			// create an interleaved frame and convert from the one we received
-			Interop.AudioFrameInterleaved interleavedAudio = new Interop.AudioFrameInterleaved()
+			interleavedAudio.Data = (IntPtr)m_aTempAudioPullBuffer.GetUnsafePtr();
+			if ( interleavedAudio.Data != null )
 			{
-				SampleRate = audio.SampleRate,
-				NoChannels = audio.NoChannels,
-				NoSamples = audio.NoSamples,
-				Timecode = audio.Timecode
-			};
+				// Convert from float planar to float interleaved audio
+				_recv.AudioFrameToInterleaved(ref audio, ref interleavedAudio);
 
-			// allocate native array to copy interleaved data into
-			unsafe
-			{
-				using (var nativeArray = new NativeArray<byte>(sizeInBytes, Allocator.TempJob, NativeArrayOptions.UninitializedMemory))
+				var totalSamples = interleavedAudio.NoSamples * interleavedAudio.NoChannels;
+				void* audioDataPtr = interleavedAudio.Data.ToPointer();
+
+				if( audioDataPtr != null )
 				{
-					interleavedAudio.Data = (IntPtr)nativeArray.GetUnsafePtr();
-
-					// Convert from float planar to float interleaved audio
-					_recv.AudioFrameToInterleaved(ref audio, ref interleavedAudio);
-
-					var totalSamples = interleavedAudio.NoSamples * interleavedAudio.NoChannels;
-					void* audioDataPtr = interleavedAudio.Data.ToPointer();
-
-					for (int i = 0; i < totalSamples; i++)
+					// Grab data from native array
+					if( m_aTempSamplesArray == null || m_aTempSamplesArray.Length < totalSamples )
 					{
-						audioBuffer.PushBack(UnsafeUtility.ReadArrayElement<float>(audioDataPtr, i));
+						m_aTempSamplesArray = new float[ totalSamples ];
+					}
+					if( m_aTempSamplesArray != null )
+					{
+						for (int i = 0; i < totalSamples; i++)
+						{
+							m_aTempSamplesArray[ i ] = UnsafeUtility.ReadArrayElement<float>( audioDataPtr, i );
+						}
+					}
+
+					// Copy new sample data into the circular array
+					lock (audioBufferLock)
+					{
+						audioBuffer.PushBack( m_aTempSamplesArray, totalSamples );
 					}
 				}
 			}
