@@ -1,0 +1,16 @@
+{
+    "name": "KlakModule",
+    "references": [
+        "GUID:b59f669f136310547b59ad72df53b42f",
+        "GUID:362b1bbad336dd44ba9cf6c699ebb523"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -9,7 +9,7 @@ namespace Klak.Ndi.Interop
 {
 
     [System.Serializable]
-    class SerializedNDISettings
+    public class SerializedNDISettings
     {
 
         public bool UseLocalSources;
@@ -53,7 +53,7 @@ namespace Klak.Ndi.Interop
                     }
                 }
                 showLocalSource = ndiSettings.UseLocalSources;
-                
+
             }
             var settings = new Settings { ShowLocalSources = showLocalSource, ExtraIPs = ipPtr };
 
