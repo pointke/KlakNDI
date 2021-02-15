@@ -34,6 +34,8 @@ public sealed partial class NdiReceiver : MonoBehaviour
       { get => _targetMaterialProperty;
         set => _targetMaterialProperty = value; }
 
+    [SerializeField] AudioSource audioSource = null;
+
     #endregion
 
     #region Runtime property

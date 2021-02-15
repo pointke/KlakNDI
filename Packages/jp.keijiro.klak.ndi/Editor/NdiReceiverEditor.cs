@@ -11,6 +11,7 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
     SerializedProperty _targetTexture;
     SerializedProperty _targetRenderer;
     SerializedProperty _targetMaterialProperty;
+    SerializedProperty _audioSource;
 
     static class Styles
     {
@@ -62,6 +63,7 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
         _targetTexture = finder["_targetTexture"];
         _targetRenderer = finder["_targetRenderer"];
         _targetMaterialProperty = finder["_targetMaterialProperty"];
+        _audioSource = finder["audioSource"];
     }
 
     public override void OnInspectorGUI()
@@ -85,6 +87,7 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
         // Target texture/renderer
         EditorGUILayout.PropertyField(_targetTexture);
         EditorGUILayout.PropertyField(_targetRenderer);
+        EditorGUILayout.PropertyField(_audioSource);
 
         EditorGUI.indentLevel++;
 
