@@ -87,7 +87,6 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
         // Target texture/renderer
         EditorGUILayout.PropertyField(_targetTexture);
         EditorGUILayout.PropertyField(_targetRenderer);
-        EditorGUILayout.PropertyField(_audioSource);
 
         EditorGUI.indentLevel++;
 
@@ -105,6 +104,8 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
         }
 
         EditorGUI.indentLevel--;
+
+        EditorGUILayout.PropertyField(_audioSource);
 
         serializedObject.ApplyModifiedProperties();
 
