@@ -31,6 +31,9 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 		_converter?.Dispose();
 		_converter = null;
+
+		if(m_aTempAudioPullBuffer.IsCreated)
+			m_aTempAudioPullBuffer.Dispose();
 	}
 
 	#endregion
@@ -62,6 +65,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	void OnDestroy()
 	{
 		tokenSource?.Cancel();
+		ReleaseInternalObjects();
 	}
 
 	#endregion
@@ -127,11 +131,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		catch (System.Exception e)
 		{
 			Debug.LogException(e);
-		}
-		finally
-		{
-			ReleaseInternalObjects();
-			Debug.Log("Good night.");
 		}
 	}
 
@@ -284,8 +283,11 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		// allocate native array to copy interleaved data into
 		unsafe
 		{
-			if( m_aTempAudioPullBuffer == null || m_aTempAudioPullBuffer.Length < sizeInBytes)
+			if( m_aTempAudioPullBuffer.Length < sizeInBytes)
 			{
+				if (m_aTempAudioPullBuffer.IsCreated)
+					m_aTempAudioPullBuffer.Dispose();
+
 				m_aTempAudioPullBuffer = new NativeArray<byte>(sizeInBytes, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 			}
 
