@@ -76,8 +76,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	{
 		try
 		{
-			Debug.Log("Starting Task");
-
 			// retrieve frames in a loop
 			while (!cancellationToken.IsCancellationRequested)
 			{
@@ -121,11 +119,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 						mainThreadContext.Post(ProcessVideoFrame, video);
 						break;
 				}
-			}
-
-			if (cancellationToken.IsCancellationRequested)
-			{
-				Debug.Log("ReceiveFrameTask cancel requested.");
 			}
 		}
 		catch (System.Exception e)
@@ -221,6 +214,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	private float[]							m_aTempSamplesArray = new float[ 1024 * 32 ];
 
 
+	// Automagically called by Unity when AudioSource component present
 	void OnAudioFilterRead(float[] data, int channels)
 	{
 		int length = data.Length;
@@ -258,7 +252,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 		if ( m_bWaitForBufferFill && !bPreviousWaitForBufferFill )
 		{
-			Debug.Log("NOT ENOUGH AUDIO : OnAudioFilterRead: data.Length = " + data.Length + "| audioBuffer.Size = " + iAudioBufferSize);
+			Debug.LogWarning($"Audio buffer underrun: OnAudioFilterRead: data.Length = {data.Length} | audioBuffer.Size = {iAudioBufferSize}", this);
 		}
 	}
 
