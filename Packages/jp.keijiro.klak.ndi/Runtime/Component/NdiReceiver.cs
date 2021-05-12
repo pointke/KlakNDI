@@ -165,12 +165,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 		if (_recv == null) return;
 
-		if (audioSource == null || !audioSource.enabled || !audioFrame.HasData)
-		{
-			_recv.FreeAudioFrame(audioFrame);
-			return;
-		}
-
 		_recv.FreeAudioFrame(audioFrame);
 	}
 
@@ -245,8 +239,8 @@ public sealed partial class NdiReceiver : MonoBehaviour
 			m_bWaitForBufferFill = (iAudioBufferSize < length);
 			if( !m_bWaitForBufferFill )
 			{
-				audioBuffer.Front( ref data, data.Length );
-				audioBuffer.PopFront( data.Length );
+				audioBuffer.Front( ref data, length );
+				audioBuffer.PopFront( length );
 			}
 		}
 
