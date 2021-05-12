@@ -46,7 +46,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	private CancellationTokenSource tokenSource;
 	private CancellationToken cancellationToken;
 	private static SynchronizationContext mainThreadContext;
-	private AudioClip audioClip;
 
 	void Awake()
 	{
@@ -180,8 +179,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 			return;
 		}
 
-		PrepareAudioSource(audioFrame);
-
 		_recv.FreeAudioFrame(audioFrame);
 	}
 
@@ -224,28 +221,6 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	//
 	private float[]							m_aTempSamplesArray = new float[ 1024 * 32 ];
 
-	void PrepareAudioSource(Interop.AudioFrame audioFrame)
-	{
-		if (audioSource.isPlaying)
-		{
-			return;
-		}
-
-		// if the audio format changed, we need to create a new audio clip
-		if (audioClip == null ||
-			audioClip.channels != audioFrame.NoChannels ||
-			audioClip.frequency != audioFrame.SampleRate)
-		{
-			Debug.Log($"PrepareAudioSource: Creating audio clip to match frame data: {audioFrame}");
-
-			// Create a AudioClip that matches the incomming frame
-			audioClip = AudioClip.Create("NdiReceiver Audio", audioFrame.SampleRate, audioFrame.NoChannels, audioFrame.SampleRate, true);
-		}
-
-		audioSource.loop = true;
-		audioSource.clip = audioClip;
-		audioSource.Play();
-	}
 
 	void OnAudioFilterRead(float[] data, int channels)
 	{
