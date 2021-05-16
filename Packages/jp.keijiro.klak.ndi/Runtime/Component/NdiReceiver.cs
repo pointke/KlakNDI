@@ -60,12 +60,17 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		cancellationToken = tokenSource.Token;
 
 		Task.Run(ReceiveFrameTask, cancellationToken);
+
+		UpdateAudioExpectations();
+		AudioSettings.OnAudioConfigurationChanged += AudioSettings_OnAudioConfigurationChanged;
 	}
 
 	void OnDestroy()
 	{
 		tokenSource?.Cancel();
 		ReleaseInternalObjects();
+
+		AudioSettings.OnAudioConfigurationChanged -= AudioSettings_OnAudioConfigurationChanged;
 	}
 
 	#endregion
@@ -206,7 +211,45 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	private Interop.AudioFrameInterleaved	interleavedAudio = new Interop.AudioFrameInterleaved();
 	//
 	private float[]							m_aTempSamplesArray = new float[ 1024 * 32 ];
+	
+	private int _expectedAudioSampleRate;
+	private int _expectedAudioChannels;
+	
+	private int _receivingAudioSampleRate;
+	private int _receivingAudioChannels;
 
+	private void AudioSettings_OnAudioConfigurationChanged(bool deviceWasChanged)
+	{
+		UpdateAudioExpectations();
+	}
+
+	private void UpdateAudioExpectations()
+	{
+		_expectedAudioSampleRate = AudioSettings.outputSampleRate;
+		switch (AudioSettings.speakerMode)
+		{
+			case AudioSpeakerMode.Mono:
+			case AudioSpeakerMode.Stereo:
+				_expectedAudioChannels = (int)AudioSettings.speakerMode;
+				break;
+
+			case AudioSpeakerMode.Quad:
+				_expectedAudioChannels = 4;
+				break;
+
+			case AudioSpeakerMode.Surround:
+				_expectedAudioChannels = 5;
+				break;
+
+			case AudioSpeakerMode.Mode5point1:
+				_expectedAudioChannels = 6;
+				break;
+
+			case AudioSpeakerMode.Mode7point1:
+				_expectedAudioChannels = 8;
+				break;
+		}
+	}
 
 	// Automagically called by Unity when AudioSource component present
 	void OnAudioFilterRead(float[] data, int channels)
@@ -255,6 +298,20 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		if (_recv == null)
 		{
 			return;
+		}
+
+		if (audio.SampleRate != _receivingAudioSampleRate)
+		{
+			_receivingAudioSampleRate = audio.SampleRate;
+			if (_receivingAudioSampleRate != _expectedAudioSampleRate)
+				Debug.LogWarning($"Audio sample rate does not match. Expected {_expectedAudioSampleRate} but received {_receivingAudioSampleRate}.", this);
+		}
+
+		if(audio.NoChannels != _receivingAudioChannels)
+		{
+			_receivingAudioChannels = audio.NoChannels;
+			if(_receivingAudioChannels != _expectedAudioChannels)
+				Debug.LogWarning($"Audio channel count does not match. Expected {_expectedAudioChannels} but received {_receivingAudioChannels}.", this);
 		}
 
 		// Converted from NDI C# Managed sample code
