@@ -214,9 +214,9 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	
 	private int _expectedAudioSampleRate;
 	private int _expectedAudioChannels;
-	
-	private int _receivingAudioSampleRate;
-	private int _receivingAudioChannels;
+
+	private int _receivedAudioSampleRate;
+	private int _receivedAudioChannels;
 
 	private void AudioSettings_OnAudioConfigurationChanged(bool deviceWasChanged)
 	{
@@ -300,18 +300,18 @@ public sealed partial class NdiReceiver : MonoBehaviour
 			return;
 		}
 
-		if (audio.SampleRate != _receivingAudioSampleRate)
+		if (audio.SampleRate != _receivedAudioSampleRate)
 		{
-			_receivingAudioSampleRate = audio.SampleRate;
-			if (_receivingAudioSampleRate != _expectedAudioSampleRate)
-				Debug.LogWarning($"Audio sample rate does not match. Expected {_expectedAudioSampleRate} but received {_receivingAudioSampleRate}.", this);
+			_receivedAudioSampleRate = audio.SampleRate;
+			if (_receivedAudioSampleRate != _expectedAudioSampleRate)
+				Debug.LogWarning($"Audio sample rate does not match. Expected {_expectedAudioSampleRate} but received {_receivedAudioSampleRate}.", this);
 		}
 
-		if(audio.NoChannels != _receivingAudioChannels)
+		if(audio.NoChannels != _receivedAudioChannels)
 		{
-			_receivingAudioChannels = audio.NoChannels;
-			if(_receivingAudioChannels != _expectedAudioChannels)
-				Debug.LogWarning($"Audio channel count does not match. Expected {_expectedAudioChannels} but received {_receivingAudioChannels}.", this);
+			_receivedAudioChannels = audio.NoChannels;
+			if(_receivedAudioChannels != _expectedAudioChannels)
+				Debug.LogWarning($"Audio channel count does not match. Expected {_expectedAudioChannels} but received {_receivedAudioChannels}.", this);
 		}
 
 		// Converted from NDI C# Managed sample code
