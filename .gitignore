@@ -11,11 +11,13 @@ Desktop.ini
 /*.csproj
 /*.sln
 *.swp
+/.vs
 
 # Unity
 /Library
 /Logs
 /Temp
+/obj
 
 # Visual Studio
 /Plugin/Windows/.vs
