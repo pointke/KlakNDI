@@ -342,22 +342,35 @@ public sealed partial class NdiReceiver : MonoBehaviour
 				// Convert from float planar to float interleaved audio
 				_recv.AudioFrameToInterleaved(ref audio, ref interleavedAudio);
 
-				var totalSamples = interleavedAudio.NoSamples * interleavedAudio.NoChannels;
+				var totalSamples = interleavedAudio.NoSamples * _expectedAudioChannels;
 				void* audioDataPtr = interleavedAudio.Data.ToPointer();
 
-				if( audioDataPtr != null )
+				if (audioDataPtr != null)
 				{
 					// Grab data from native array
-					if( m_aTempSamplesArray == null || m_aTempSamplesArray.Length < totalSamples )
+					if (m_aTempSamplesArray.Length < totalSamples)
 					{
-						m_aTempSamplesArray = new float[ totalSamples ];
+						m_aTempSamplesArray = new float[totalSamples];
 					}
-					if( m_aTempSamplesArray != null )
+
+					// Blindly write a mix of all input channels to the output channels if their count does not match. Opt-in?
+					if (_receivedAudioChannels != _expectedAudioChannels)
 					{
-						for (int i = 0; i < totalSamples; i++)
+						for (int i = 0; i < interleavedAudio.NoSamples; i++)
 						{
-							m_aTempSamplesArray[ i ] = UnsafeUtility.ReadArrayElement<float>( audioDataPtr, i );
+							var sample = 0f;
+							for (int j = 0; j < interleavedAudio.NoChannels; j++)
+								sample += UnsafeUtility.ReadArrayElement<float>(audioDataPtr, i * interleavedAudio.NoChannels + j);
+
+							for (int j = 0; j < _expectedAudioChannels; j++)
+								m_aTempSamplesArray[i * _expectedAudioChannels + j] = sample;
 						}
+					}
+					else
+					{
+						var tempSamplesPtr = UnsafeUtility.PinGCArrayAndGetDataAddress(m_aTempSamplesArray, out ulong tempSamplesHandle);
+						UnsafeUtility.MemCpy(tempSamplesPtr, audioDataPtr, totalSamples * sizeof(float));
+						UnsafeUtility.ReleaseGCObject(tempSamplesHandle);
 					}
 
 					// Copy new sample data into the circular array
