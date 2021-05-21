@@ -63,7 +63,7 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
         _targetTexture = finder["_targetTexture"];
         _targetRenderer = finder["_targetRenderer"];
         _targetMaterialProperty = finder["_targetMaterialProperty"];
-        _audioSource = finder["audioSource"];
+        _audioSource = finder["_audioSource"];
     }
 
     public override void OnInspectorGUI()

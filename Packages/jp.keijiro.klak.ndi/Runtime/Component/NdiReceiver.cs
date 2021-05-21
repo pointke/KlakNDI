@@ -63,6 +63,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 		UpdateAudioExpectations();
 		AudioSettings.OnAudioConfigurationChanged += AudioSettings_OnAudioConfigurationChanged;
+		CheckAudioSource();
 	}
 
 	void OnDestroy()
@@ -71,6 +72,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		ReleaseInternalObjects();
 
 		AudioSettings.OnAudioConfigurationChanged -= AudioSettings_OnAudioConfigurationChanged;
+		DestroyAudioSourceBridge();
 	}
 
 	#endregion
@@ -218,6 +220,38 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	private int _receivedAudioSampleRate;
 	private int _receivedAudioChannels;
 
+	private bool _hasAudioSource;
+	private NdiReceiverAudioSourceBridge _audioSourceBridge;
+
+	private void CheckAudioSource()
+	{
+		_hasAudioSource = _audioSource != null;
+
+		DestroyAudioSourceBridge();
+
+		if (_hasAudioSource == false)
+			return;
+
+		if (_audioSource.gameObject == gameObject)
+			return;
+
+		// Create a bridge component if the AudioSource is not on this GameObject so we can feed audio samples to it.
+		_audioSourceBridge = _audioSource.GetComponent<NdiReceiverAudioSourceBridge>();
+		if(_audioSourceBridge == null)
+			_audioSourceBridge = _audioSource.gameObject.AddComponent<NdiReceiverAudioSourceBridge>();
+
+		_audioSourceBridge.Handler = HandleAudioFilterRead;
+	}
+
+	private void DestroyAudioSourceBridge()
+	{
+		if (_audioSourceBridge == null)
+			return;
+
+		_audioSourceBridge.Handler = null;
+		GameObject.DestroyImmediate(_audioSourceBridge);
+	}
+
 	private void AudioSettings_OnAudioConfigurationChanged(bool deviceWasChanged)
 	{
 		UpdateAudioExpectations();
@@ -251,8 +285,14 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		}
 	}
 
-	// Automagically called by Unity when AudioSource component present
+	// Automagically called by Unity when an AudioSource component is present on the same GameObject
+
 	void OnAudioFilterRead(float[] data, int channels)
+	{
+		HandleAudioFilterRead(data, channels);
+	}
+
+	void HandleAudioFilterRead(float[] data, int channels)
 	{
 		int length = data.Length;
 
@@ -295,7 +335,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 
 	void FillAudioBuffer(Interop.AudioFrame audio)
 	{
-		if (_recv == null)
+		if (_recv == null || _hasAudioSource == false)
 		{
 			return;
 		}
@@ -313,6 +353,9 @@ public sealed partial class NdiReceiver : MonoBehaviour
 			if(_receivedAudioChannels != _expectedAudioChannels)
 				Debug.LogWarning($"Audio channel count does not match. Expected {_expectedAudioChannels} but received {_receivedAudioChannels}.", this);
 		}
+
+		if (audio.Metadata != null)
+			Debug.Log(audio.Metadata);
 
 		// Converted from NDI C# Managed sample code
 		// we're working in bytes, so take the size of a 32 bit sample (float) into account
@@ -353,7 +396,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 						m_aTempSamplesArray = new float[totalSamples];
 					}
 
-					// Blindly write a mix of all input channels to the output channels if their count does not match. Opt-in?
+					// Blindly write a mix of all input channels to the output channels if their count does not match. Better make this behaviour opt-in?
 					if (_receivedAudioChannels != _expectedAudioChannels)
 					{
 						for (int i = 0; i < interleavedAudio.NoSamples; i++)
@@ -376,7 +419,13 @@ public sealed partial class NdiReceiver : MonoBehaviour
 					// Copy new sample data into the circular array
 					lock (audioBufferLock)
 					{
-						audioBuffer.PushBack( m_aTempSamplesArray, totalSamples );
+						if (audioBuffer.Capacity < totalSamples)
+						{
+							audioBuffer = new CircularBuffer<float>(totalSamples);
+						}
+
+						audioBuffer.PushBack(m_aTempSamplesArray, totalSamples);
+						//audioBuffer.PushBack( m_aTempSamplesArray, Mathf.Min(audioBuffer.Capacity, totalSamples) );
 					}
 				}
 			}
