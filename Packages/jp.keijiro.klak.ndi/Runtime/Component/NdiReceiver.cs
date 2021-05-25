@@ -246,7 +246,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		if(_audioSourceBridge == null)
 			_audioSourceBridge = _audioSource.gameObject.AddComponent<NdiReceiverAudioSourceBridge>();
 
-		_audioSourceBridge.Handler = HandleAudioFilterRead;
+		_audioSourceBridge.Handler = this;
 	}
 
 	private void DestroyAudioSourceBridge()
@@ -255,7 +255,11 @@ public sealed partial class NdiReceiver : MonoBehaviour
 			return;
 
 		_audioSourceBridge.Handler = null;
-		GameObject.DestroyImmediate(_audioSourceBridge);
+
+		if(_audioSourceBridge.IsDestroyed == false)
+			GameObject.DestroyImmediate(_audioSourceBridge);
+
+		_audioSourceBridge = null;
 	}
 
 	private void AudioSettings_OnAudioConfigurationChanged(bool deviceWasChanged)
@@ -292,13 +296,25 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	}
 
 	// Automagically called by Unity when an AudioSource component is present on the same GameObject
-
 	void OnAudioFilterRead(float[] data, int channels)
 	{
+		if ((object)_audioSource == null)
+			return;
+
+		if ((object)_audioSourceBridge != null)
+			return;
+
 		HandleAudioFilterRead(data, channels);
 	}
 
-	void HandleAudioFilterRead(float[] data, int channels)
+	internal void HandleAudioSourceBridgeOnDestroy()
+	{
+		_audioSource = null;
+
+		DestroyAudioSourceBridge();
+	}
+
+	internal void HandleAudioFilterRead(float[] data, int channels)
 	{
 		int length = data.Length;
 

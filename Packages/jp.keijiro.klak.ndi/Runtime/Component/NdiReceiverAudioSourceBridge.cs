@@ -4,22 +4,40 @@ using UnityEngine;
 
 namespace Klak.Ndi
 {
-	[RequireComponent(typeof(AudioSource))]
-	public class NdiReceiverAudioSourceBridge : MonoBehaviour
+	public sealed partial class NdiReceiver : MonoBehaviour
 	{
-		public delegate void HandleAudioFilterRead(float[] data, int channels);
-
-		public HandleAudioFilterRead Handler;
-
-		private void Awake()
+		[RequireComponent(typeof(AudioSource))]
+		private class NdiReceiverAudioSourceBridge : MonoBehaviour
 		{
-			hideFlags = HideFlags.NotEditable;
-		}
+			public bool IsDestroyed { get; internal set; }
 
-		// Automagically called by Unity when an AudioSource component is present on the same GameObject
-		private void OnAudioFilterRead(float[] data, int channels)
-		{
-			Handler(data, channels);
+			public NdiReceiver Handler { get; set; }
+
+			private void Awake()
+			{
+				hideFlags = HideFlags.NotEditable;
+
+				// Workaround for external AudioSources: Stop playback because otherwise volume and all it's other properties do not get applied.
+				AudioSource audioSource = GetComponent<AudioSource>();
+				audioSource.Stop();
+				audioSource.Play();
+			}
+
+			// Automagically called by Unity when an AudioSource component is present on the same GameObject
+			private void OnAudioFilterRead(float[] data, int channels)
+			{
+				Handler.HandleAudioFilterRead(data, channels);
+			}
+
+			private void OnDestroy()
+			{
+				if (IsDestroyed)
+					return;
+
+				IsDestroyed = true;
+
+				Handler?.HandleAudioSourceBridgeOnDestroy();
+			}
 		}
 	}
 }
