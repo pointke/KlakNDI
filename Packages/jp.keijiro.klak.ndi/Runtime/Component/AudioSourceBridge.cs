@@ -7,7 +7,7 @@ namespace Klak.Ndi
 	public sealed partial class NdiReceiver : MonoBehaviour
 	{
 		[RequireComponent(typeof(AudioSource))]
-		private class NdiReceiverAudioSourceBridge : MonoBehaviour
+		private class AudioSourceBridge : MonoBehaviour
 		{
 			public bool IsDestroyed { get; internal set; }
 

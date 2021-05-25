@@ -221,7 +221,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	private int _receivedAudioChannels;
 
 	private bool _hasAudioSource;
-	private NdiReceiverAudioSourceBridge _audioSourceBridge;
+	private AudioSourceBridge _audioSourceBridge;
 
 	internal void CheckAudioSource()
 	{
@@ -242,9 +242,9 @@ public sealed partial class NdiReceiver : MonoBehaviour
 			return;
 
 		// Create a bridge component if the AudioSource is not on this GameObject so we can feed audio samples to it.
-		_audioSourceBridge = _audioSource.GetComponent<NdiReceiverAudioSourceBridge>();
+		_audioSourceBridge = _audioSource.GetComponent<AudioSourceBridge>();
 		if(_audioSourceBridge == null)
-			_audioSourceBridge = _audioSource.gameObject.AddComponent<NdiReceiverAudioSourceBridge>();
+			_audioSourceBridge = _audioSource.gameObject.AddComponent<AudioSourceBridge>();
 
 		_audioSourceBridge.Handler = this;
 	}
