@@ -105,11 +105,16 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
 
         EditorGUI.indentLevel--;
 
+        EditorGUI.BeginChangeCheck();
         EditorGUILayout.PropertyField(_audioSource);
+        var audioSourceChanged = EditorGUI.EndChangeCheck();
 
         serializedObject.ApplyModifiedProperties();
 
         if (restart) RequestRestart();
+
+        if(audioSourceChanged)
+            foreach (NdiReceiver receiver in targets) receiver.CheckAudioSource();
     }
 }
 

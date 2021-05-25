@@ -223,8 +223,11 @@ public sealed partial class NdiReceiver : MonoBehaviour
 	private bool _hasAudioSource;
 	private NdiReceiverAudioSourceBridge _audioSourceBridge;
 
-	private void CheckAudioSource()
+	internal void CheckAudioSource()
 	{
+		if(Application.isPlaying == false)
+			return;
+
 		_hasAudioSource = _audioSource != null;
 
 		DestroyAudioSourceBridge();
