@@ -246,7 +246,7 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		if(_audioSourceBridge == null)
 			_audioSourceBridge = _audioSource.gameObject.AddComponent<AudioSourceBridge>();
 
-		_audioSourceBridge.Handler = this;
+		_audioSourceBridge._handler = this;
 	}
 
 	private void DestroyAudioSourceBridge()
@@ -254,9 +254,9 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		if (_audioSourceBridge == null)
 			return;
 
-		_audioSourceBridge.Handler = null;
+		_audioSourceBridge._handler = null;
 
-		if(_audioSourceBridge.IsDestroyed == false)
+		if(_audioSourceBridge._isDestroyed == false)
 			GameObject.DestroyImmediate(_audioSourceBridge);
 
 		_audioSourceBridge = null;

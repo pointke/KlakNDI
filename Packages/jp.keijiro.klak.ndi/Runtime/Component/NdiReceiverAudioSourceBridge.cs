@@ -9,9 +9,8 @@ namespace Klak.Ndi
 		[RequireComponent(typeof(AudioSource))]
 		private class AudioSourceBridge : MonoBehaviour
 		{
-			public bool IsDestroyed { get; internal set; }
-
-			public NdiReceiver Handler { get; set; }
+			internal bool _isDestroyed;
+			internal NdiReceiver _handler;
 
 			private void Awake()
 			{
@@ -26,17 +25,17 @@ namespace Klak.Ndi
 			// Automagically called by Unity when an AudioSource component is present on the same GameObject
 			private void OnAudioFilterRead(float[] data, int channels)
 			{
-				Handler.HandleAudioFilterRead(data, channels);
+				_handler.HandleAudioFilterRead(data, channels);
 			}
 
 			private void OnDestroy()
 			{
-				if (IsDestroyed)
+				if (_isDestroyed)
 					return;
 
-				IsDestroyed = true;
+				_isDestroyed = true;
 
-				Handler?.HandleAudioSourceBridgeOnDestroy();
+				_handler?.HandleAudioSourceBridgeOnDestroy();
 			}
 		}
 	}
