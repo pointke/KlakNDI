@@ -113,7 +113,7 @@ sealed class NdiReceiverEditor : UnityEditor.Editor
 
         if (restart) RequestRestart();
 
-        if(audioSourceChanged)
+        if (audioSourceChanged)
             foreach (NdiReceiver receiver in targets) receiver.CheckAudioSource();
     }
 }
