@@ -379,83 +379,145 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		if (audio.Metadata != null)
 			Debug.Log(audio.Metadata);
 
-		// Converted from NDI C# Managed sample code
-		// we're working in bytes, so take the size of a 32 bit sample (float) into account
-		int sizeInBytes = audio.NoSamples * audio.NoChannels * sizeof(float);
+		int totalSamples = 0;
 
-		// Unity is expecting interleaved audio and NDI uses planar.
-		// create an interleaved frame and convert from the one we received
-		interleavedAudio.SampleRate = audio.SampleRate;
-		interleavedAudio.NoChannels = audio.NoChannels;
-		interleavedAudio.NoSamples = audio.NoSamples;
-		interleavedAudio.Timecode = audio.Timecode;
-
-		// allocate native array to copy interleaved data into
-		unsafe
+		// If the received data's format is as expected we can convert from interleaved to planar and just memcpy
+		if (_receivedAudioSampleRate == _expectedAudioSampleRate && _receivedAudioChannels == _expectedAudioChannels)
 		{
-			if( m_aTempAudioPullBuffer.Length < sizeInBytes)
+			// Converted from NDI C# Managed sample code
+			// we're working in bytes, so take the size of a 32 bit sample (float) into account
+			int sizeInBytes = audio.NoSamples * audio.NoChannels * sizeof(float);
+
+			// Unity is expecting interleaved audio and NDI uses planar.
+			// create an interleaved frame and convert from the one we received
+			interleavedAudio.SampleRate = audio.SampleRate;
+			interleavedAudio.NoChannels = audio.NoChannels;
+			interleavedAudio.NoSamples = audio.NoSamples;
+			interleavedAudio.Timecode = audio.Timecode;
+
+			// allocate native array to copy interleaved data into
+			unsafe
 			{
-				if (m_aTempAudioPullBuffer.IsCreated)
-					m_aTempAudioPullBuffer.Dispose();
-
-				m_aTempAudioPullBuffer = new NativeArray<byte>(sizeInBytes, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-			}
-
-			interleavedAudio.Data = (IntPtr)m_aTempAudioPullBuffer.GetUnsafePtr();
-			if ( interleavedAudio.Data != null )
-			{
-				// Convert from float planar to float interleaved audio
-				_recv.AudioFrameToInterleaved(ref audio, ref interleavedAudio);
-
-				var totalSamples = interleavedAudio.NoSamples * _expectedAudioChannels;
-				void* audioDataPtr = interleavedAudio.Data.ToPointer();
-
-				if (audioDataPtr != null)
+				if (m_aTempAudioPullBuffer.Length < sizeInBytes)
 				{
-					// Grab data from native array
-					if (m_aTempSamplesArray.Length < totalSamples)
-					{
-						m_aTempSamplesArray = new float[totalSamples];
-					}
+					if (m_aTempAudioPullBuffer.IsCreated)
+						m_aTempAudioPullBuffer.Dispose();
 
-					// Blindly write a mix of all input channels to the output channels if their count does not match. Better make this behaviour opt-in?
-					if (_receivedAudioChannels != _expectedAudioChannels)
+					m_aTempAudioPullBuffer = new NativeArray<byte>(sizeInBytes, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+				}
+
+				interleavedAudio.Data = (IntPtr)m_aTempAudioPullBuffer.GetUnsafePtr();
+				if (interleavedAudio.Data != null)
+				{
+					// Convert from float planar to float interleaved audio
+					_recv.AudioFrameToInterleaved(ref audio, ref interleavedAudio);
+
+					totalSamples = interleavedAudio.NoSamples * _expectedAudioChannels;
+					void* audioDataPtr = interleavedAudio.Data.ToPointer();
+
+					if (audioDataPtr != null)
 					{
-						for (int i = 0; i < interleavedAudio.NoSamples; i++)
+						if (m_aTempSamplesArray.Length < totalSamples)
 						{
-							var sample = 0f;
-							for (int j = 0; j < interleavedAudio.NoChannels; j++)
-								sample += UnsafeUtility.ReadArrayElement<float>(audioDataPtr, i * interleavedAudio.NoChannels + j);
-
-							for (int j = 0; j < _expectedAudioChannels; j++)
-								m_aTempSamplesArray[i * _expectedAudioChannels + j] = sample;
+							m_aTempSamplesArray = new float[totalSamples];
 						}
-					}
-					else
-					{
+
+						// Grab data from native array
 						var tempSamplesPtr = UnsafeUtility.PinGCArrayAndGetDataAddress(m_aTempSamplesArray, out ulong tempSamplesHandle);
 						UnsafeUtility.MemCpy(tempSamplesPtr, audioDataPtr, totalSamples * sizeof(float));
 						UnsafeUtility.ReleaseGCObject(tempSamplesHandle);
 					}
+				}
+			}
+		}
+		// If we need to resample or remap channels we can just work with the interleaved data as is
+		else
+		{
+			unsafe
+			{
+				void* audioDataPtr = audio.Data.ToPointer();
 
-					// Copy new sample data into the circular array
-					lock (audioBufferLock)
+				var resamplingRate = (float)_receivedAudioSampleRate / _expectedAudioSampleRate;
+				var needsToResample = resamplingRate != 1;
+				var neededSamples = needsToResample ? (int)(audio.NoSamples / resamplingRate) : audio.NoSamples;
+
+				totalSamples = neededSamples * _expectedAudioChannels;
+
+				// Blindly mix channels if their count does not match. Needs better remapping. Make this behaviour opt-in?
+				if (_receivedAudioChannels != _expectedAudioChannels)
+				{
+					for (int i = 0; i < neededSamples; i++)
 					{
-						if (audioBuffer.Capacity < totalSamples)
-						{
-							audioBuffer = new CircularBuffer<float>(totalSamples);
-						}
+						var sample = 0f;
+						for (int j = 0; j < audio.NoChannels; j++)
+							sample += ReadAudioDataSampleInterleaved(audio, audioDataPtr, i, j, resamplingRate);
 
-						audioBuffer.PushBack(m_aTempSamplesArray, totalSamples);
-						//audioBuffer.PushBack( m_aTempSamplesArray, Mathf.Min(audioBuffer.Capacity, totalSamples) );
+						for (int j = 0; j < _expectedAudioChannels; j++)
+							m_aTempSamplesArray[i * _expectedAudioChannels + j] = sample;
+					}
+				}
+				// So we just need to resample
+				else
+				{
+					for (int i = 0; i < neededSamples; i++)
+					{
+						for (int j = 0; j < _expectedAudioChannels; j++)
+							m_aTempSamplesArray[i * _expectedAudioChannels + j] = ReadAudioDataSampleInterleaved(audio, audioDataPtr, i, j, resamplingRate);
 					}
 				}
 			}
 		}
+
+		// Copy new sample data into the circular array
+		lock (audioBufferLock)
+		{
+			if (audioBuffer.Capacity < totalSamples)
+			{
+				audioBuffer = new CircularBuffer<float>(totalSamples);
+			}
+
+			audioBuffer.PushBack(m_aTempSamplesArray, totalSamples);
+		}
 	}
+
+	private unsafe float ReadAudioDataSampleInterleaved(Interop.AudioFrame audio, void* audioDataPtr, int sampleIndex, int channelIndex, float resamplingRate)
+	{
+		if (resamplingRate == 1)
+			return UnsafeUtility.ReadArrayElement<float>(audioDataPtr, sampleIndex + channelIndex * audio.NoSamples);
+
+		var resamplingIndex = (int)(sampleIndex * resamplingRate);
+		var t = (sampleIndex * resamplingRate) - resamplingIndex;
+
+		var lowerSample = UnsafeUtility.ReadArrayElement<float>(audioDataPtr, resamplingIndex + channelIndex * audio.NoSamples);
+
+		if (Mathf.Approximately(t, 0))
+			return lowerSample;
+
+		var upperSample = UnsafeUtility.ReadArrayElement<float>(audioDataPtr, (resamplingIndex + 1) + channelIndex * audio.NoSamples);
+
+		return Mathf.Lerp(lowerSample, upperSample, t);
+	}
+
+	//private unsafe float ReadAudioDataSamplePlanar(void* audioDataPtr, int sampleIndex, int channelIndex, float resamplingRate)
+	//{
+	//	if (resamplingRate == 1)
+	//		return UnsafeUtility.ReadArrayElement<float>(audioDataPtr, sampleIndex * interleavedAudio.NoChannels + channelIndex);
+
+	//	var resamplingIndex = (int)(sampleIndex * resamplingRate);
+	//	var t = (sampleIndex * resamplingRate) - resamplingIndex;
+
+	//	var lowerSample = UnsafeUtility.ReadArrayElement<float>(audioDataPtr, resamplingIndex * interleavedAudio.NoChannels + channelIndex);
+
+	//	if (Mathf.Approximately(t, 0))
+	//		return lowerSample;
+
+	//	var upperSample = UnsafeUtility.ReadArrayElement<float>(audioDataPtr, (resamplingIndex + 1) * interleavedAudio.NoChannels + channelIndex);
+
+	//	return Mathf.Lerp(lowerSample, upperSample, t);
+	//}
 
 	#endregion
 
-	}
+}
 
 }
