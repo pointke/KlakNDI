@@ -235,6 +235,9 @@ public sealed partial class NdiReceiver : MonoBehaviour
 		if (_hasAudioSource == false)
 			return;
 
+		// Make sure it is playing so OnAudioFilterRead gets called by Unity
+		_audioSource.Play();
+
 		if (_audioSource.gameObject == gameObject)
 			return;
 
